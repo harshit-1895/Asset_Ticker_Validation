@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 from emailutility import sendmailutility
 from config import *
+from pretty_html_table import build_table
 
 
 # Loading env file
@@ -36,7 +37,7 @@ class rowCount:
         self.s3 = self.s3_connection()
         self.cursor, self.cnxn = self.connection_rds()
         # Today Timestamp
-        d_today = datetime.today()
+        d_today = datetime.today()-timedelta(days=1)
         # date_today = d_today.astimezone(pytz.timezone('US/Eastern'))
         self.folder_name = f'{d_today.year}{d_today.month:02d}{d_today.day:02d}'
         self.df = self.data_insert()
@@ -165,15 +166,36 @@ class rowCount:
                 new_df = pd.DataFrame(
                     {'Exchange': exchange_list, 'CurrentCount': current_count_list,
                      'PreviousCount': previous_count_list})
+                # new_df = pd.read_csv('total.csv')
+
 
                 new_df['rowCountDifference'] = new_df['CurrentCount'] - new_df['PreviousCount']
 
                 new_df = new_df[(new_df['rowCountDifference'] >= THRESHOLD_VALUE) | (
                         new_df['rowCountDifference'] <= (THRESHOLD_VALUE * -1))]
                 new_df.set_index('Exchange', inplace=True)
-                new_df.to_csv('merge_data.csv')
-                subject = "Asset Ticker Validation Report - " + self.folder_name
-                body = "Hi All,\n\nPlease find the attached file for Asset Ticker Validation.\n\nRegards,\nDigital Asset Reasearch"
+                new_df.to_csv('asset_ticker_validation.csv')
+                subject = "New Asset-Ticker By Exchange Diff Report - " + self.folder_name
+
+                final_csv_read = pd.read_csv('asset_ticker_validation.csv')
+                list_final = []
+                list_final2 = []
+                list_final3 =[]
+                list_final4 = []
+                for i, row in final_csv_read.iterrows():
+                    if row['rowCountDifference'] > 20:
+                        list_final.append(row['Exchange'])
+                        list_final2.append(row['CurrentCount'])
+                        list_final3.append(row['PreviousCount'])
+                        list_final4.append(row['rowCountDifference'])
+
+                final_df = pd.DataFrame (
+                    {'Exchange': list_final, 'CurrentCount': list_final2,
+                     'PreviousCount': list_final3, 'rowCountDifference': list_final4}
+                )
+                final_df = final_df.astype(str)
+                import pdb;pdb.set_trace()
+                body = "Hi All,\n\nPlease find the attached file for Asset Ticker Validation\n{}.\n\nRegards,\nDigital Asset Reasearch".format(final_df)
                 all_files = os.listdir()
                 filename = list(filter(lambda f: f.endswith('.csv'), all_files))
                 obj = sendmailutility(subject, body, TO, FROM, filename[0])
@@ -187,7 +209,7 @@ class rowCount:
 
 
 if __name__ == '__main__':
-    rowCount()
+    # rowCount()
     date_today = datetime.today().astimezone(pytz.timezone('US/Eastern'))
     start_today = date_today.replace(hour=START_HOUR, minute=START_MINUTE, second=15, microsecond=0)
     start_stamp = start_today.timestamp()
